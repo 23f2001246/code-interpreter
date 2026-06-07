@@ -1,71 +1,43 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
-from io import StringIO
-import sys
-import traceback
-import re
 
-app = FastAPI(
-    title="Code Interpreter API",
-    version="1.0.0"
-)
+class SentimentRequest(BaseModel):
+sentences: List[str]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@app.post("/sentiment")
+async def sentiment(request: SentimentRequest):
 
-class CodeRequest(BaseModel):
-    code: str
+```
+positive_words = {
+    "love", "great", "good", "excellent", "awesome",
+    "amazing", "happy", "fantastic", "wonderful", "best"
+}
 
-class CodeResponse(BaseModel):
-    error: List[int]
-    result: str
+negative_words = {
+    "bad", "terrible", "awful", "hate", "worst",
+    "sad", "angry", "horrible", "poor", "disappointed"
+}
 
-def execute_python_code(code: str):
-    old_stdout = sys.stdout
-    sys.stdout = StringIO()
+results = []
 
-    try:
-        exec(code)
-        output = sys.stdout.getvalue()
-        return {"success": True, "output": output}
+for sentence in request.sentences:
+    text = sentence.lower()
 
-    except Exception:
-        output = traceback.format_exc()
-        return {"success": False, "output": output}
+    pos = sum(word in text for word in positive_words)
+    neg = sum(word in text for word in negative_words)
 
-    finally:
-        sys.stdout = old_stdout
+    if pos > neg:
+        sentiment = "happy"
+    elif neg > pos:
+        sentiment = "sad"
+    else:
+        sentiment = "neutral"
 
-@app.get("/")
-def root():
-    return {"message": "Code Interpreter API Running"}
+    results.append({
+        "sentence": sentence,
+        "sentiment": sentiment
+    })
 
-@app.post("/code-interpreter", response_model=CodeResponse)
-async def code_interpreter(request: CodeRequest):
-    result = execute_python_code(request.code)
-
-    if result["success"]:
-        return CodeResponse(
-            error=[],
-            result=result["output"]
-        )
-
-    traceback_text = result["output"]
-
-    matches = re.findall(r'line (\d+)', traceback_text)
-
-    error_lines = []
-    if matches:
-        error_lines = [int(matches[-1])]
-
-    return CodeResponse(
-        error=error_lines,
-        result=traceback_text
-    )
+return {"results": results}
+```
