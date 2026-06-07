@@ -1,12 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List
 from io import StringIO
 import sys
 import traceback
 import re
 
-app = FastAPI()
+app = FastAPI(
+    title="Code Interpreter API",
+    version="1.0.0"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,6 +22,10 @@ app.add_middleware(
 
 class CodeRequest(BaseModel):
     code: str
+
+class CodeResponse(BaseModel):
+    error: List[int]
+    result: str
 
 def execute_python_code(code: str):
     old_stdout = sys.stdout
@@ -35,16 +43,19 @@ def execute_python_code(code: str):
     finally:
         sys.stdout = old_stdout
 
-@app.post("/code-interpreter")
-async def code_interpreter(request: CodeRequest):
+@app.get("/")
+def root():
+    return {"message": "Code Interpreter API Running"}
 
+@app.post("/code-interpreter", response_model=CodeResponse)
+async def code_interpreter(request: CodeRequest):
     result = execute_python_code(request.code)
 
     if result["success"]:
-        return {
-            "error": [],
-            "result": result["output"]
-        }
+        return CodeResponse(
+            error=[],
+            result=result["output"]
+        )
 
     traceback_text = result["output"]
 
@@ -54,7 +65,7 @@ async def code_interpreter(request: CodeRequest):
     if matches:
         error_lines = [int(matches[-1])]
 
-    return {
-        "error": error_lines,
-        "result": traceback_text
-    }
+    return CodeResponse(
+        error=error_lines,
+        result=traceback_text
+    )
